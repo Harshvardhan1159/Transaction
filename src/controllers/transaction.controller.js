@@ -1,5 +1,8 @@
 const accountModel = require("../models/account.model");
 const transactionModel = require("../models/transaction.model");
+const ledgerModel = require("../models/ledger.model");
+const mongoose = require("mongoose");
+
 
 
 
@@ -67,5 +70,43 @@ async function createTransaction(req, res) {
             success: false,
         })
     }
+    const session = await mongoose.startSession();
+    session.startTransaction()
 
+    const transaction = await transactionModel.create({
+        fromAccount,
+        toAccount,
+        amount,
+        idempotencyKey,
+        status: "PENDING"
+    }, { session })
+
+    const debitLedgerEntry = await ledgerModel.create({
+        account: fromAccount,
+        transaction: transaction._id,
+        amount: amount,
+        type: "DEBIT",
+    }, { session })
+
+    const creditLedgerEntry = await ledgerModel.create({
+        account: toAccount,
+        transaction: transaction._id,
+        amount: amount,
+        type: "CREDIT",
+    }, { session })
+
+    transaction.status = "COMPLETED"
+    await transaction.save({ session })
+    session.endSession()
+    return res.status(200).json({
+        message: "Transaction completed",
+        success: true,
+    })
+
+
+
+}
+
+module.exports = {
+    createTransaction,
 }
