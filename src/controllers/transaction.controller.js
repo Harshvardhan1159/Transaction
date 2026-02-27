@@ -14,30 +14,57 @@ async function createTransaction(req, res) {
             message: "All fields are required",
             success: false,
         })
-        const fromUseraccount = await accountModel.findById(fromAccount);
-        const toUseraccount = await accountModel.findById(toAccount);
+        const fromUseraccount = await accountModel.findById({ _id: fromAccount });
+        const toUseraccount = await accountModel.findById({ _id: toAccount });
         if (!fromUseraccount || !toUseraccount) {
             return res.status(400).json({
                 message: "Account not found",
                 success: false,
             })
         }
-        if (fromUseraccount.balance < amount) {
+        const isTransactionExist = await transactionModel.findOne({
+            idempotencyKey: idempotencyKey,
+        })
+        if (isTransactionExist) {
+            if (isTransactionExist.status === "COMPLETED") {
+                return res.status(200).json({
+                    message: "Transaction already completed",
+                    success: true,
+                })
+            }
+            if (isTransactionExist.status === "FAILED") {
+                return res.status(200).json({
+                    message: "Transaction already failed",
+                    success: true,
+                })
+            }
+            if (isTransactionExist.status === "PENDING") {
+                return res.status(200).json({
+                    message: "Transaction already pending",
+                    success: true,
+                })
+            }
+            if (isTransactionExist.status === "REVERSED") {
+                return res.status(200).json({
+                    message: "Transaction already reversed",
+                    success: true,
+                })
+            }
+        }
+        if (fromUseraccount.status !== "ACTIVE" || toUseraccount.status !== "ACTIVE") {
             return res.status(400).json({
-                message: "Insufficient balance",
+                message: "Account is not active",
                 success: false,
             })
         }
-        const transaction = await transactionModel.create({
-            fromAccount,
-            toAccount,
-            amount,
-            idempotencyKey,
-        })
-        return res.status(200).json({
-            message: "Transaction created successfully",
-            success: true,
-            transaction,
+
+
+    }
+    const balance = await fromUseraccount.getBalance();
+    if (balance < amount) {
+        return res.status(400).json({
+            message: "Insufficient balance",
+            success: false,
         })
     }
 
